@@ -14,9 +14,6 @@ CONFIG_DIR = config('CONFIG_DIR', default='/tmp/config')
 GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 
-# from https://stackoverflow.com/a/14693789
-ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
-
 
 def kubemunch(*args):
     kubectl = sh.kubectl.bake('-o', 'yaml')
@@ -70,12 +67,14 @@ def update_deployed_version(deployment, version):
     notify_new_relic(deployment, version)
     notify_datadog(deployment, version)
     notify_irc(deployment, version)
+    vdict = {'apiVersion': 'versions.mozilla.org/v1',
+             'kind': 'Version',
+             'metadata': {'name': deployment.metadata.name},
+             'deployed': version}
+    if deployment.metadata.name == deployment.metadata.namespace:
+        vdict['applied'] = version
     sh.kubectl('apply', '-n', deployment.metadata.namespace, '-f', '-',
-               _in=yaml.dump({'apiVersion': 'versions.mozilla.org/v1',
-                              'kind': 'Version',
-                              'metadata': {'name': deployment.metadata.name},
-                              'applied': version,
-                              'deployed': version}))
+               _in=yaml.dump(vdict))
 
 
 def check_deployment(deployment, version):
