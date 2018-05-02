@@ -1,5 +1,6 @@
 from time import sleep
 from tempfile import mkdtemp
+import os
 import re
 
 import sh
@@ -36,26 +37,18 @@ def get_latest_commit():
     return sh.git('rev-parse', '--short', 'HEAD')
 
 
-def get_current_commit():
-    """
-    Pull current commit from k8s CRD
-    """
-    # TODO
+def get_applied_version(namespace):
+    for version in kubemunch('get', '-n', namespace, 'versions').items:
+        if version.metadata.name == namespace:
+            return version.applied
 
 
-def git_updated_files(current_commit, latest_commit):
-    """
-    Return filenames that have been added or modified
-    """
-    if latest_commit != current_commit:
-        diff = sh.git('diff', '--name-status', current_commit, latest_commit)
-        for line in diff.splitlines():
-            line = ansi_escape.sub('', line)
-            # filter empty lines and deleted files
-            if line.startswith(('M ', 'A ')):
-                yield line.split()[1]
-    else:
-        return []
+def update_applied_version(namespace, version):
+    sh.kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(
+               {'apiVersion': 'versions.mozilla.org/v1',
+                'kind': 'Version',
+                'metadata': {'name': namespace},
+                'applied': version}))
 
 
 def notify_new_relic(deployment, version):
@@ -77,16 +70,18 @@ def update_deployed_version(deployment, version):
     notify_new_relic(deployment, version)
     notify_datadog(deployment, version)
     notify_irc(deployment, version)
-    sh.kubectl('apply', '-f', '-', _in=yaml.dump(
-               {'apiVersion': 'versions.mozilla.org/v1',
-                'kind': 'Version',
-                'metadata': {'name': deployment.metadata.name},
-                'deployed': version}))
+    sh.kubectl('apply', '-n', deployment.metadata.namespace, '-f', '-',
+               _in=yaml.dump({'apiVersion': 'versions.mozilla.org/v1',
+                              'kind': 'Version',
+                              'metadata': {'name': deployment.metadata.name},
+                              'applied': version,
+                              'deployed': version}))
 
 
 def check_deployment(deployment, version):
     if deployment.metadata.annotations.get('applied-version',
                                            '') != version:
+        # annotate first to ensure updated secrets and configmaps
         sh.kubectl('annotate', '-n', deployment.metadata.namespace,
                    'deployment', deployment.metadata.name,
                    'applied-version={}'.format(version))
@@ -97,11 +92,6 @@ def check_deployment(deployment, version):
 
 
 def check_deployments(version):
-    """
-    Annotate deployments in managed namespaces with applied-commit
-    This ensures that changes to Secrets and ConfigMaps are picked up
-    Alert configured channel(s) when deployments are complete and store in CRD
-    """
     for namespace in MANAGED_NAMESPACES:
         versions = kubemunch('get', '-n', namespace, 'versions').items
         finished_deployments = [v.metadata.name for v in versions
@@ -112,23 +102,19 @@ def check_deployments(version):
                 check_deployment(deployment, version)
 
 
-def apply_updates(current_commit, latest_commit):
-    for updated_file in git_updated_files(current_commit, latest_commit):
-        if '/' in updated_file and updated_file.endswith(
-                ('.yaml', '.yml', '.json')):
-            namespace, filename = updated_file.split('/', 1)
-            if namespace in MANAGED_NAMESPACES:
-                print('applying', filename, 'in', namespace)
-                print(sh.kubectl('apply', '-n', namespace, '-f', filename))
+def apply_updates(namespace, version):
+    if os.path.isdir(namespace):
+        print(sh.kubectl('apply', '-n', namespace, '-f', namespace))
+        update_applied_version(namespace, version)
 
 
 def main():
     shallow_clone()
     while True:
-        latest_commit = get_latest_commit()
-        current_commit = get_current_commit()
-        if latest_commit != current_commit:
-            apply_updates(current_commit, latest_commit)
-            # TODO: handle deletions or document lack of support for deletions
-        check_deployments(latest_commit)
+        for namespace in MANAGED_NAMESPACES:
+            version = get_latest_commit()
+            if version != get_applied_version(namespace):
+                apply_updates(namespace, version)
+                # TODO: handle deletions or document lack of support for them
+        check_deployments(version)
         sleep(GIT_SYNC_INTERVAL)
