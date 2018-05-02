@@ -1,0 +1,5 @@
+decouple
+kubernetes
+munch
+requests
+sh

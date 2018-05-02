@@ -1,0 +1,6 @@
+apiVersion: versions.mozilla.org/v1
+kind: Version
+metadata:
+  name: example-dev
+applied: abcdef0
+deployed: abcdef0
