@@ -1,7 +1,5 @@
 from time import sleep
-from tempfile import mkdtemp
 import os
-import re
 
 import sh
 import yaml
@@ -11,6 +9,7 @@ from munch import munchify
 
 CONFIG_REPO = config('CONFIG_REPO')
 CONFIG_DIR = config('CONFIG_DIR', default='/tmp/config')
+CONFIG_BRANCH = config('CONFIG_BRANCH', default='master')
 GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 
@@ -24,9 +23,9 @@ def kubemunch(*args):
     return munched
 
 
-def shallow_clone(repo=CONFIG_REPO, config_dir=CONFIG_DIR):
-    sh.git('clone', '--depth', '1', repo, config_dir)
-    sh.cd(config_dir)
+def shallow_clone(repo=CONFIG_REPO, conf_dir=CONFIG_DIR, branch=CONFIG_BRANCH):
+    sh.git('clone', '--depth', '1', repo, conf_dir, '-b', branch)
+    sh.cd(conf_dir)
 
 
 def get_latest_commit():
