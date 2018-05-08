@@ -1,4 +1,4 @@
-decouple
+python-decouple
 kubernetes
 munch
 requests

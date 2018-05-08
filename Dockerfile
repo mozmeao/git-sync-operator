@@ -1,17 +1,19 @@
 FROM python:3-slim
 
+RUN apt-get update && apt-get install -y git
+
 # Extra python env
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # add non-priviledged user
-RUN adduser --uid 1000 --disabled-password --gecos '' --no-create-home operator
+RUN adduser --uid 1000 --disabled-password --gecos '' --ingroup operator --no-create-home operator
 
 WORKDIR /app
 
 # Install app
-COPY block_aws.py /app/block_aws.py
+COPY git_sync_operator.py /app/git_sync_operator.py
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 

@@ -1,5 +1,6 @@
 from time import sleep
 import os
+import sys
 
 import sh
 import yaml
@@ -16,35 +17,44 @@ MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 
 def kubemunch(*args):
     kubectl = sh.kubectl.bake('-o', 'yaml')
-    munched = munchify(yaml.load(kubectl(args).stdout))
-    if 'items' in munched.keys():
-        # override items method
-        munched.items = munched['items']
-    return munched
+    try:
+        munched = munchify(yaml.load(kubectl(args).stdout))
+    except Exception:
+        print(sys.exc_info())
+    else:
+        if 'items' in munched.keys():
+            # override items method
+            munched.items = munched['items']
+        return munched
 
 
 def shallow_clone(repo=CONFIG_REPO, conf_dir=CONFIG_DIR, branch=CONFIG_BRANCH):
-    sh.git('clone', '--depth', '1', repo, conf_dir, '-b', branch)
+    try:
+        print(sh.git('clone', '--depth', '1', repo, conf_dir, '-b', branch))
+    except Exception:
+        print(sys.exc_info())
     sh.cd(conf_dir)
 
 
 def get_latest_commit():
-    sh.git('pull')
+    print(sh.git('pull'))
     return sh.git('rev-parse', '--short', 'HEAD')
 
 
 def get_applied_version(namespace):
-    for version in kubemunch('get', '-n', namespace, 'versions').items:
-        if version.metadata.name == namespace:
-            return version.applied
+    versions = kubemunch('get', '-n', namespace, 'versions')
+    if versions:
+        for version in versions.items:
+            if version.metadata.name == namespace:
+                return version.applied
 
 
 def update_applied_version(namespace, version):
-    sh.kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(
-               {'apiVersion': 'versions.mozilla.org/v1',
-                'kind': 'Version',
-                'metadata': {'name': namespace},
-                'applied': version}))
+    print(sh.kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(
+                     {'apiVersion': 'versions.mozilla.org/v1',
+                      'kind': 'Version',
+                      'metadata': {'name': namespace},
+                      'applied': version})))
 
 
 def notify_new_relic(deployment, version):
@@ -91,13 +101,15 @@ def check_deployment(deployment, version):
 
 def check_deployments(version):
     for namespace in MANAGED_NAMESPACES:
-        versions = kubemunch('get', '-n', namespace, 'versions').items
-        finished_deployments = [v.metadata.name for v in versions
-                                if v.get('deployed') == version]
-        deployments = kubemunch('get', '-n', namespace, 'deployment').items
-        for deployment in deployments:
-            if deployment.metadata.name not in finished_deployments:
-                check_deployment(deployment, version)
+        versions = kubemunch('get', '-n', namespace, 'versions')
+        if versions:
+            finished_deployments = [v.metadata.name for v in versions.items
+                                    if v.get('deployed') == version]
+            deployments = kubemunch('get', '-n', namespace, 'deployment')
+            if deployments:
+                for deployment in deployments.items:
+                    if deployment.metadata.name not in finished_deployments:
+                        check_deployment(deployment, version)
 
 
 def apply_updates(namespace, version):
@@ -110,9 +122,19 @@ def main():
     shallow_clone()
     while True:
         for namespace in MANAGED_NAMESPACES:
-            version = get_latest_commit()
-            if version != get_applied_version(namespace):
-                apply_updates(namespace, version)
-                # TODO: handle deletions or document lack of support for them
-        check_deployments(version)
+            try:
+                version = get_latest_commit()
+                print('latest commit:', version)
+                applied_version = get_applied_version(namespace)
+                print('applied version:', applied_version)
+                if version != applied_version:
+                    apply_updates(namespace, version)
+                    # TODO: handle deletions or document lack of support
+                check_deployments(version)
+            except Exception:
+                print(sys.exc_info())
         sleep(GIT_SYNC_INTERVAL)
+
+
+if __name__ == '__main__':
+    main()
