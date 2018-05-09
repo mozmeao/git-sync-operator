@@ -18,9 +18,11 @@ MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 def kubemunch(*args):
     kubectl = sh.kubectl.bake('-o', 'yaml')
     try:
-        munched = munchify(yaml.load(kubectl(args).stdout))
+        result = kubectl(args)
+        munched = munchify(yaml.load(result.stdout))
     except Exception:
         print(sys.exc_info())
+        print(result.stderr)
     else:
         if 'items' in munched.keys():
             # override items method
@@ -50,11 +52,15 @@ def get_applied_version(namespace):
 
 
 def update_applied_version(namespace, version):
-    print(sh.kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(
-                     {'apiVersion': 'versions.mozilla.org/v1',
-                      'kind': 'Version',
-                      'metadata': {'name': namespace},
-                      'applied': version})))
+    try:
+        result = sh.kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(
+                            {'apiVersion': 'versions.mozilla.org/v1',
+                             'kind': 'Version',
+                             'metadata': {'name': namespace},
+                             'applied': version}))
+    except Exception:
+        print(sys.exc_info())
+        print(result.stderr)
 
 
 def notify_new_relic(deployment, version):
@@ -114,8 +120,14 @@ def check_deployments(version):
 
 def apply_updates(namespace, version):
     if os.path.isdir(namespace):
-        print(sh.kubectl('apply', '-n', namespace, '-f', namespace))
-        update_applied_version(namespace, version)
+        try:
+            result = sh.kubectl('apply', '-n', namespace, '-f', namespace)
+        except Exception:
+            print(sys.exc_info())
+            print(result.stderr)
+        else:
+            print(result.stdout)
+            update_applied_version(namespace, version)
 
 
 def main():
