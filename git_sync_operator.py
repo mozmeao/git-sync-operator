@@ -15,26 +15,29 @@ GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 
 
-def kubemunch(*args):
-    kubectl = sh.kubectl.bake('-o', 'yaml')
+def kubectl(*args):
     try:
-        result = kubectl(args)
-        munched = munchify(yaml.load(result.stdout))
-    except Exception:
-        print(sys.exc_info())
-        print(result.stderr)
-    else:
-        if 'items' in munched.keys():
-            # override items method
-            munched.items = munched['items']
-        return munched
+        return sh.kubectl(args)
+    except sh.ErrorReturnCode as e:
+        print(e)
+
+
+def kubemunch(*args):
+    if 'yaml' not in args:
+        args.extend(['-o', 'yaml'])
+    result = kubectl(args)
+    munched = munchify(yaml.load(result.stdout))
+    if 'items' in munched.keys():
+        # override items method
+        munched.items = munched['items']
+    return munched
 
 
 def shallow_clone(repo=CONFIG_REPO, conf_dir=CONFIG_DIR, branch=CONFIG_BRANCH):
     try:
         print(sh.git('clone', '--depth', '1', repo, conf_dir, '-b', branch))
-    except Exception:
-        print(sys.exc_info())
+    except sh.ErrorReturnCode as e:
+        print(e)
     sh.cd(conf_dir)
 
 
@@ -52,15 +55,11 @@ def get_applied_version(namespace):
 
 
 def update_applied_version(namespace, version):
-    try:
-        result = sh.kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(
-                            {'apiVersion': 'versions.mozilla.org/v1',
-                             'kind': 'Version',
-                             'metadata': {'name': namespace},
-                             'applied': version}))
-    except Exception:
-        print(sys.exc_info())
-        print(result.stderr)
+    kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(
+                {'apiVersion': 'versions.mozilla.org/v1',
+                 'kind': 'Version',
+                 'metadata': {'name': namespace},
+                 'applied': version}))
 
 
 def notify_new_relic(deployment, version):
@@ -88,17 +87,17 @@ def update_deployed_version(deployment, version):
              'deployed': version}
     if deployment.metadata.name == deployment.metadata.namespace:
         vdict['applied'] = version
-    sh.kubectl('apply', '-n', deployment.metadata.namespace, '-f', '-',
-               _in=yaml.dump(vdict))
+    kubectl('apply', '-n', deployment.metadata.namespace, '-f', '-',
+            _in=yaml.dump(vdict))
 
 
 def check_deployment(deployment, version):
     if deployment.metadata.annotations.get('applied-version',
                                            '') != version:
         # annotate first to ensure updated secrets and configmaps
-        sh.kubectl('annotate', '-n', deployment.metadata.namespace,
-                   'deployment', deployment.metadata.name,
-                   'applied-version={}'.format(version))
+        kubectl('annotate', '-n', deployment.metadata.namespace,
+                'deployment', deployment.metadata.name,
+                'applied-version={}'.format(version))
     elif (deployment.status.updatedReplicas ==
           deployment.status.replicas ==
           deployment.status.readyReplicas > 0):
@@ -120,12 +119,8 @@ def check_deployments(version):
 
 def apply_updates(namespace, version):
     if os.path.isdir(namespace):
-        try:
-            result = sh.kubectl('apply', '-n', namespace, '-f', namespace)
-        except Exception:
-            print(sys.exc_info())
-            print(result.stderr)
-        else:
+        result = kubectl('apply', '-n', namespace, '-f', namespace)
+        if result:
             print(result.stdout)
             update_applied_version(namespace, version)
 
