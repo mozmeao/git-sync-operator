@@ -99,7 +99,7 @@ def check_deployment(deployment, version):
                                            '') != version:
         # annotate first to ensure updated secrets and configmaps
         kubectl('annotate', '-n', deployment.metadata.namespace,
-                'deployment', deployment.metadata.name,
+                'deployment', deployment.metadata.name, '--overwrite',
                 'applied-version={}'.format(version))
     elif (deployment.status.updatedReplicas ==
           deployment.status.replicas ==
