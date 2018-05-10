@@ -124,7 +124,7 @@ def apply_updates(namespace, version):
     if os.path.isdir(namespace):
         result = kubectl('apply', '-n', namespace, '-f', namespace)
         if result:
-            print(result.stdout)
+            print(result)
             update_applied_version(namespace, version)
 
 
