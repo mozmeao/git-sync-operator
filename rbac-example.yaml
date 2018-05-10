@@ -1,35 +1,106 @@
-kind: Namespace
-apiVersion: v1
-metadata:
-  name: git-sync-operator
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: example-git-sync-operator
-  namespace: git-sync-operator
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: git-sync-operator
 rules:
-- apiGroups: [""]
-  resources: ["namespaces"]
-  verbs: ["get", "list", "create"]
-- apiGroups: [""]
-  resources: ["deployments", "hpas", "configmaps", "ingress"]
-  verbs: ["get", "list", "create", "update"]
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - deployments/rollback
+  - deployments/scale
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - extensions
+  resources:
+  - deployments
+  - deployments/rollback
+  - deployments/scale
+  - ingresses
+  - replicasets
+  - replicasets/scale
+  - replicationcontrollers/scale
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - mozilla.org
+  resources:
+  - versions
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
 ---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: example-app
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: example-app-git-sync-operator
+  namespace: example-app
+---
+# https://kubernetes.io/docs/admin/authorization/rbac/#rolebinding-and-clusterrolebinding
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: grant-git-sync-operator-access
+  namespace: example-app
 subjects:
 - kind: ServiceAccount
-  name: example-git-sync-operator
-  namespace: git-sync-operator
+  name: example-app-git-sync-operator
+  namespace: example-app
 roleRef:
-  kind: Role
+  kind: ClusterRole
   name: git-sync-operator
   apiGroup: rbac.authorization.k8s.io
