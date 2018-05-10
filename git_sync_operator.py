@@ -1,6 +1,6 @@
 from time import sleep
 import os
-import sys
+import traceback
 
 import sh
 import yaml
@@ -15,51 +15,54 @@ GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 
 
-def kubectl(*args):
+def kubectl(*args, **kwargs):
     try:
-        return sh.kubectl(args)
+        return sh.kubectl(*args, **kwargs)
+    except sh.ErrorReturnCode as e:
+        print(e)
+
+
+def git(*args, **kwargs):
+    try:
+        return str(sh.contrib.git(*args, **kwargs)).strip()
     except sh.ErrorReturnCode as e:
         print(e)
 
 
 def kubemunch(*args):
     if 'yaml' not in args:
-        args.extend(['-o', 'yaml'])
-    result = kubectl(args)
-    munched = munchify(yaml.load(result.stdout))
-    if 'items' in munched.keys():
-        # override items method
-        munched.items = munched['items']
-    return munched
+        args += ('-o', 'yaml')
+    result = kubectl(*args)
+    if result:
+        munched = munchify(yaml.load(result.stdout))
+        if 'items' in munched.keys():
+            # override items method
+            munched.items = munched['items']
+        return munched
 
 
 def shallow_clone(repo=CONFIG_REPO, conf_dir=CONFIG_DIR, branch=CONFIG_BRANCH):
-    try:
-        print(sh.git('clone', '--depth', '1', repo, conf_dir, '-b', branch))
-    except sh.ErrorReturnCode as e:
-        print(e)
-    sh.cd(conf_dir)
+    git('clone', '--depth', '1', repo, conf_dir, '-b', branch)
 
 
 def get_latest_commit():
-    print(sh.git('pull'))
-    return sh.git('rev-parse', '--short', 'HEAD')
+    git('pull')
+    return git('rev-parse', '--short', 'HEAD')
 
 
 def get_applied_version(namespace):
-    versions = kubemunch('get', '-n', namespace, 'versions')
-    if versions:
-        for version in versions.items:
-            if version.metadata.name == namespace:
-                return version.applied
+    versions = kubemunch('get', '-n', namespace, 'versions', namespace)
+    if versions and versions.items:
+        return versions.items[0].applied
 
 
 def update_applied_version(namespace, version):
-    kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(
-                {'apiVersion': 'versions.mozilla.org/v1',
-                 'kind': 'Version',
-                 'metadata': {'name': namespace},
-                 'applied': version}))
+    vdict = {'apiVersion': 'mozilla.org/v1',
+             'kind': 'Version',
+             'metadata': {'name': namespace},
+             'applied': version}
+    print('updating applied version:', vdict)
+    kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(vdict))
 
 
 def notify_new_relic(deployment, version):
@@ -81,7 +84,7 @@ def update_deployed_version(deployment, version):
     notify_new_relic(deployment, version)
     notify_datadog(deployment, version)
     notify_irc(deployment, version)
-    vdict = {'apiVersion': 'versions.mozilla.org/v1',
+    vdict = {'apiVersion': 'mozilla.org/v1',
              'kind': 'Version',
              'metadata': {'name': deployment.metadata.name},
              'deployed': version}
@@ -127,6 +130,7 @@ def apply_updates(namespace, version):
 
 def main():
     shallow_clone()
+    sh.cd(CONFIG_DIR)
     while True:
         for namespace in MANAGED_NAMESPACES:
             try:
@@ -138,8 +142,8 @@ def main():
                     apply_updates(namespace, version)
                     # TODO: handle deletions or document lack of support
                 check_deployments(version)
-            except Exception:
-                print(sys.exc_info())
+            except Exception as e:
+                traceback.print_exc()
         sleep(GIT_SYNC_INTERVAL)
 
 
