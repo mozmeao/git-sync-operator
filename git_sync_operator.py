@@ -51,9 +51,9 @@ def get_latest_commit():
 
 
 def get_applied_version(namespace):
-    versions = kubemunch('get', '-n', namespace, 'versions', namespace)
-    if versions and versions.items:
-        return versions.items[0].applied
+    version = kubemunch('get', '-n', namespace, 'versions', namespace)
+    if version:
+        return version.applied
 
 
 def update_applied_version(namespace, version):
