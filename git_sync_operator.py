@@ -1,7 +1,9 @@
+from datetime import datetime
 from time import sleep
 import os
 import traceback
 
+import boto3
 import sh
 import yaml
 from decouple import Csv, config
@@ -13,6 +15,10 @@ CONFIG_DIR = config('CONFIG_DIR', default='/tmp/config')
 CONFIG_BRANCH = config('CONFIG_BRANCH', default='master')
 GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
+S3_BUCKET = config('S3_BUCKET', default='')
+# cluster name is not currently available from API: kubernetes/federation#132
+CLUSTER_NAME = config('CLUSTER_NAME', default='')
+
 
 
 def kubectl(*args, **kwargs):
@@ -65,25 +71,17 @@ def update_applied_version(namespace, version):
     kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(vdict))
 
 
-def notify_new_relic(deployment, version):
-    "TODO"
-
-
-def notify_datadog(deployment, version):
-    "TODO"
-
-
-def notify_irc(deployment, version):
-    "TODO"
+def log_deployment_s3(deployment, version):
+    if not S3_BUCKET or not CLUSTER_NAME:
+        return
+    key = '/'.join([CLUSTER_NAME, deployment.metadata.namespace,
+                    deployment.metadata.name, version])
+    body = datetime.utcnow().isoformat()
+    client = boto3.client('s3')
+    client.put_object(Body=body, Bucket=S3_BUCKET, Key=key)
 
 
 def update_deployed_version(deployment, version):
-    """
-    notify configured channels
-    """
-    notify_new_relic(deployment, version)
-    notify_datadog(deployment, version)
-    notify_irc(deployment, version)
     vdict = {'apiVersion': 'mozilla.org/v1',
              'kind': 'Version',
              'metadata': {'name': deployment.metadata.name},
@@ -92,6 +90,7 @@ def update_deployed_version(deployment, version):
         vdict['applied'] = version
     kubectl('apply', '-n', deployment.metadata.namespace, '-f', '-',
             _in=yaml.dump(vdict))
+    log_deployment_s3(deployment, version)
 
 
 def check_deployment(deployment, version):
