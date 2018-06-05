@@ -78,7 +78,8 @@ def log_deployment_s3(deployment, version):
                     deployment.metadata.name, version])
     body = datetime.utcnow().isoformat()
     client = boto3.client('s3')
-    client.put_object(Body=body, Bucket=S3_BUCKET, Key=key)
+    print('put s3://', S3_BUCKET, '/', key)
+    client.put_object(Body=body, Bucket=S3_BUCKET, Key=key, ACL='public-read')
 
 
 def update_deployed_version(deployment, version):
@@ -88,6 +89,7 @@ def update_deployed_version(deployment, version):
              'deployed': version}
     if deployment.metadata.name == deployment.metadata.namespace:
         vdict['applied'] = version
+    print('updating deployed version:', vdict)
     kubectl('apply', '-n', deployment.metadata.namespace, '-f', '-',
             _in=yaml.dump(vdict))
     log_deployment_s3(deployment, version)
