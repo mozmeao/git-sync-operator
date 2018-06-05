@@ -78,7 +78,7 @@ def log_deployment_s3(deployment, version):
                     deployment.metadata.name, version])
     body = datetime.utcnow().isoformat()
     client = boto3.client('s3')
-    print('put s3://', S3_BUCKET, '/', key)
+    print('put s3://{}/{}'.format(S3_BUCKET, key))
     client.put_object(Body=body, Bucket=S3_BUCKET, Key=key, ACL='public-read')
 
 
