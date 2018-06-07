@@ -10,15 +10,14 @@ from decouple import Csv, config
 from munch import munchify
 
 
-CONFIG_REPO = config('CONFIG_REPO')
-CONFIG_DIR = config('CONFIG_DIR', default='/tmp/config')
+# cluster name is not currently available from API: kubernetes/federation#132
+CLUSTER_NAME = config('CLUSTER_NAME', default='')
 CONFIG_BRANCH = config('CONFIG_BRANCH', default='master')
+CONFIG_DIR = config('CONFIG_DIR', default='/tmp/config')
+CONFIG_REPO = config('CONFIG_REPO')
 GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 S3_BUCKET = config('S3_BUCKET', default='')
-# cluster name is not currently available from API: kubernetes/federation#132
-CLUSTER_NAME = config('CLUSTER_NAME', default='')
-
 
 
 def kubectl(*args, **kwargs):
@@ -122,11 +121,21 @@ def check_deployments(version):
 
 
 def apply_updates(namespace, version):
+    applied = False
     if os.path.isdir(namespace):
         result = kubectl('apply', '-n', namespace, '-f', namespace)
         if result:
+            applied = True
             print(result)
-            update_applied_version(namespace, version)
+    if CLUSTER_NAME:
+        cluster_namespace = os.path.join(CLUSTER_NAME, namespace)
+        if os.path.isdir(cluster_namespace):
+            result = kubectl('apply', '-n', namespace, '-f', cluster_namespace)
+            if result:
+                applied = True
+                print(result)
+    if applied:
+        update_applied_version(namespace, version)
 
 
 def main():
