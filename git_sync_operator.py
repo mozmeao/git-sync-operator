@@ -19,11 +19,12 @@ CONFIG_BRANCH = config('CONFIG_BRANCH', default='master')
 CONFIG_DIR = config('CONFIG_DIR', default='/tmp/config')
 CONFIG_REPO = config('CONFIG_REPO')
 GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
+# default to WARNING because sh is extremely verbose at INFO level
+LOG_LEVEL = config('LOG_LEVEL', default=logging.WARNING, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 S3_BUCKET = config('S3_BUCKET', default='')
 
-# use WARNING b/c sh is extremely verbose at INFO level
-logging.basicConfig(stream=sys.stdout, level=logging.WARNING,
+logging.basicConfig(stream=sys.stdout, level=LOG_LEVEL,
                     format='%(asctime)s %(name)s %(message)s')
 logging.Formatter.converter = time.gmtime
 log = logging.getLogger('git-sync-operator')
