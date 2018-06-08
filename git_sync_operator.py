@@ -148,9 +148,9 @@ def main():
         for namespace in MANAGED_NAMESPACES:
             try:
                 version = get_latest_commit()
-                log.debug('latest commit:', version)
+                log.info('latest commit:', version)
                 applied_version = get_applied_version(namespace)
-                log.debug('applied version:', applied_version)
+                log.info('applied version:', applied_version)
                 if version != applied_version:
                     apply_updates(namespace, version)
                     # TODO: handle deletions or document lack of support
