@@ -59,9 +59,13 @@ def shallow_clone(repo=CONFIG_REPO, conf_dir=CONFIG_DIR, branch=CONFIG_BRANCH):
     git('clone', '--depth', '1', repo, conf_dir, '-b', branch)
 
 
+def git_revision():
+    return git('rev-parse', '--short', 'HEAD')
+
+
 def get_latest_commit():
     git('pull')
-    return git('rev-parse', '--short', 'HEAD')
+    return git_revision()
 
 
 def get_applied_version(namespace):
@@ -142,8 +146,10 @@ def apply_updates(namespace, version):
 
 
 def main():
+    log.warning('Starting git-sync-operator')
     shallow_clone()
     sh.cd(CONFIG_DIR)
+    log.warning('Initial clone version: {}'.format(git_revision()))
     while True:
         for namespace in MANAGED_NAMESPACES:
             try:
