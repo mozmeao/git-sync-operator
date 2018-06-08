@@ -1,6 +1,9 @@
 from datetime import datetime
 from time import sleep
+import logging
 import os
+import sys
+import time
 import traceback
 
 import boto3
@@ -19,19 +22,23 @@ GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 S3_BUCKET = config('S3_BUCKET', default='')
 
+logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                    format='%(asctime)s %(name)s %(levelname)s %(message)s')
+logging.Formatter.converter = time.gmtime
+log = logging.getLogger('git-sync-operator')
 
 def kubectl(*args, **kwargs):
     try:
         return sh.kubectl(*args, **kwargs)
     except sh.ErrorReturnCode as e:
-        print(e)
+        log.error(e)
 
 
 def git(*args, **kwargs):
     try:
         return str(sh.contrib.git(*args, **kwargs)).strip()
     except sh.ErrorReturnCode as e:
-        print(e)
+        log.error(e)
 
 
 def kubemunch(*args):
@@ -66,7 +73,7 @@ def update_applied_version(namespace, version):
              'kind': 'Version',
              'metadata': {'name': namespace},
              'applied': version}
-    print('updating applied version:', vdict)
+    log.info('updating applied version: %s' % vdict)
     kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(vdict))
 
 
@@ -77,7 +84,7 @@ def log_deployment_s3(deployment, version):
                     deployment.metadata.name, version])
     body = datetime.utcnow().isoformat()
     client = boto3.client('s3')
-    print('put s3://{}/{}'.format(S3_BUCKET, key))
+    log.info('put s3://{}/{}'.format(S3_BUCKET, key))
     client.put_object(Body=body, Bucket=S3_BUCKET, Key=key, ACL='public-read')
 
 
@@ -88,7 +95,7 @@ def update_deployed_version(deployment, version):
              'deployed': version}
     if deployment.metadata.name == deployment.metadata.namespace:
         vdict['applied'] = version
-    print('updating deployed version:', vdict)
+    log.info('updating deployed version: %s' % vdict)
     kubectl('apply', '-n', deployment.metadata.namespace, '-f', '-',
             _in=yaml.dump(vdict))
     log_deployment_s3(deployment, version)
@@ -126,14 +133,14 @@ def apply_updates(namespace, version):
         result = kubectl('apply', '-n', namespace, '-f', namespace)
         if result:
             applied = True
-            print(result)
+            log.info(result)
     if CLUSTER_NAME:
         cluster_namespace = os.path.join(CLUSTER_NAME, namespace)
         if os.path.isdir(cluster_namespace):
             result = kubectl('apply', '-n', namespace, '-f', cluster_namespace)
             if result:
                 applied = True
-                print(result)
+                log.info(result)
     if applied:
         update_applied_version(namespace, version)
 
@@ -145,15 +152,15 @@ def main():
         for namespace in MANAGED_NAMESPACES:
             try:
                 version = get_latest_commit()
-                print('latest commit:', version)
+                log.debug('latest commit:', version)
                 applied_version = get_applied_version(namespace)
-                print('applied version:', applied_version)
+                log.debug('applied version:', applied_version)
                 if version != applied_version:
                     apply_updates(namespace, version)
                     # TODO: handle deletions or document lack of support
                 check_deployments(version)
             except Exception as e:
-                traceback.print_exc()
+                logging.error(traceback.format_exc())
         sleep(GIT_SYNC_INTERVAL)
 
 
