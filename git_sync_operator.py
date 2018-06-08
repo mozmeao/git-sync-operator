@@ -22,8 +22,9 @@ GIT_SYNC_INTERVAL = config('GIT_SYNC_INTERVAL', default=60, cast=int)
 MANAGED_NAMESPACES = config('MANAGED_NAMESPACES', cast=Csv())
 S3_BUCKET = config('S3_BUCKET', default='')
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                    format='%(asctime)s %(name)s %(levelname)s %(message)s')
+# use WARNING b/c sh is extremely verbose at INFO level
+logging.basicConfig(stream=sys.stdout, level=logging.WARNING,
+                    format='%(asctime)s %(name)s %(message)s')
 logging.Formatter.converter = time.gmtime
 log = logging.getLogger('git-sync-operator')
 
@@ -73,7 +74,7 @@ def update_applied_version(namespace, version):
              'kind': 'Version',
              'metadata': {'name': namespace},
              'applied': version}
-    log.info('updating applied version: %s' % vdict)
+    log.warning('updating applied version: %s' % vdict)
     kubectl('apply', '-n', namespace, '-f', '-', _in=yaml.dump(vdict))
 
 
@@ -84,7 +85,7 @@ def log_deployment_s3(deployment, version):
                     deployment.metadata.name, version])
     body = datetime.utcnow().isoformat()
     client = boto3.client('s3')
-    log.info('put s3://{}/{}'.format(S3_BUCKET, key))
+    log.warning('put s3://{}/{}'.format(S3_BUCKET, key))
     client.put_object(Body=body, Bucket=S3_BUCKET, Key=key, ACL='public-read')
 
 
@@ -95,7 +96,7 @@ def update_deployed_version(deployment, version):
              'deployed': version}
     if deployment.metadata.name == deployment.metadata.namespace:
         vdict['applied'] = version
-    log.info('updating deployed version: %s' % vdict)
+    log.warning('updating deployed version: %s' % vdict)
     kubectl('apply', '-n', deployment.metadata.namespace, '-f', '-',
             _in=yaml.dump(vdict))
     log_deployment_s3(deployment, version)
@@ -127,14 +128,14 @@ def apply_updates(namespace, version):
         result = kubectl('apply', '-n', namespace, '-f', namespace)
         if result:
             applied = True
-            log.info(result)
+            log.warning(result)
     if CLUSTER_NAME:
         cluster_namespace = os.path.join(CLUSTER_NAME, namespace)
         if os.path.isdir(cluster_namespace):
             result = kubectl('apply', '-n', namespace, '-f', cluster_namespace)
             if result:
                 applied = True
-                log.info(result)
+                log.warning(result)
     if applied:
         update_applied_version(namespace, version)
 
