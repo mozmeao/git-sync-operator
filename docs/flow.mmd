@@ -1,0 +1,29 @@
+sequenceDiagram
+    participant Dev
+    participant App Repo
+    participant Jenkins
+    participant DockerHub
+    participant Config Repo
+    participant Operator
+    participant K8s API
+    participant S3
+    participant App
+
+    Dev->>App Repo: git push
+    App Repo->>Jenkins: trigger pipeline build
+    Jenkins->>DockerHub: docker push
+    Jenkins->>Config Repo: update deployment w/ new image tag
+    loop 10 seconds
+        S3->>Jenkins: poll for deployment version file
+    end
+    loop 10 seconds    
+        Config Repo->>Operator: git pull
+    end
+    Operator->>K8s API: kubectl apply
+    loop 10 seconds
+        K8s API->>Operator: poll for complete deployment
+    end
+    Operator->>S3: push deployment version file
+    S3-->>Jenkins: poll detects version file
+    Jenkins->>App: integration tests
+    Jenkins->>Dev: deployment complete
