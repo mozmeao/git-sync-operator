@@ -196,7 +196,7 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: git-sync-operator
-	apiGroup: rbac.authorization.k8s.io
+  apiGroup: rbac.authorization.k8s.io
 ```
 
 Only one ClusterRole needs to be defined per cluster. We keep namespace configs (shown directly above) after the ClusterRole like this:
@@ -316,8 +316,7 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: git-sync-operator
-	apiGroup: rbac.authorization.k8s.io
-
+  apiGroup: rbac.authorization.k8s.io
 ```
 
 ### S3-push IAM user <a name="S3IAM"></a>
