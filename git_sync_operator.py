@@ -110,7 +110,7 @@ def update_deployed_version(deployment, version):
 def check_deployment(deployment, version):
     if (deployment.status.updatedReplicas ==
             deployment.status.replicas ==
-            deployment.status.readyReplicas > 0):
+            deployment.status.get('readyReplicas', 0) > 0):
         update_deployed_version(deployment, version)
 
 
