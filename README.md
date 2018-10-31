@@ -37,10 +37,6 @@ For example, bedrock (www.mozilla.org) is split into:
 
 ### Naming conventions
 
-- `./all-clusters/$namespace`
-
-  - while the git-sync-operator does not use this directory explicitly, CI/CD can be used to make deployments to multiple regions serially by copying and committing yaml from `./all-clusters/your_namespace` to `$cluster_name/$namespace` a region-at-a-time.
-
 - `./$cluster_name/$namespace`
 
   - this yaml is applied to the given cluster and namespace if the git-sync-operator is currently running in that cluster and namespace.
@@ -65,15 +61,6 @@ Below is an example layout (taken from [www-config](https://github.com/mozmeao/w
 ├── configs
 ├── docs
 ├── jenkins
-├── all-clusters
-│   ├── bedrock-dev
-│   │   ├── deploy.yaml
-│   │   ├── hpa.yaml
-│   │   └── svc.yaml
-│   ├── bedrock-prod
-│   │   ├── deploy.yaml
-│   │   ├── hpa.yaml
-│   │   └── svc.yaml
 ├── git-sync-operator
 │   └── rbac.yaml
 ├── iowa-a
@@ -151,15 +138,6 @@ deployed: abcdef0
 ### Parallel vs Serial deployments
 
 If the git-sync-operator is running in multiple clusters for the same application/namespace, then all clusters may update at the same time during a deployment. This may be undesirable, and it is recommended that the CI job only commits changes to specific cluster namespace subdirectories one at a time.
-
-For example, we use an `all-clusters` directory containing namespace subdirectories that Jenkins will copy over to a specific cluster namespace subdirectory. That's a mouthful, so here's a more concrete example:
-
-For each $cluster in [foo, bar, baz]:
-
-1. Jenkins copies and commits `./all-clusters/bedrock-dev/*` to `./$cluster/bedrock-dev/`.
-2. The git-sync-operator in the $cluster detects the commit and applies changes. When it's done, it signals back to Jenkins via a file in S3 that it's finished.
-3. Jenkins moves on to the next cluster in the list.
-
 
 ## S3 version notification <a name="s3notification"></a>
 
